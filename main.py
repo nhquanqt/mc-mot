@@ -3,7 +3,7 @@ import os, time
 import torch
 from torchvision.transforms.transforms import Pad, RandomCrop
 
-from reid.model import Model
+from reid.model.model import Model
 from reid.train import train_model
 
 from torchvision import transforms

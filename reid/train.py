@@ -25,10 +25,7 @@ def valid_model(model, dataloader):
     while not dataloader.query_done:
         images_t, labels_t = dataloader.next_batch_query()
         images_t = images_t.to(DEVICE)
-        if model.identity_classes is not None:
-            feat, _, _ = model(images_t)
-        else:
-            feat, _ = model(images_t)
+        feat = model(images_t)
         query_feat.append(feat.cpu().detach())
 
     query_feat = torch.cat(query_feat)
@@ -41,10 +38,7 @@ def valid_model(model, dataloader):
     while not dataloader.gallery_done:
         images_t, labels_t = dataloader.next_batch_gallery()
         images_t = images_t.to(DEVICE)
-        if model.identity_classes is not None:
-            feat, _, _ = model(images_t)
-        else:
-            feat, _ = model(images_t)
+        feat = model(images_t)
         gallery_feat.append(feat.cpu().detach())
 
     gallery_feat = torch.cat(gallery_feat)
