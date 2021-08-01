@@ -99,5 +99,6 @@ def train_model(model, optimizer, criterion, scheduler, dataloader, n_epochs=100
             print(f'Rank-1 score: {cmc_score[0]}')
             print(f'Rank-5 score: {cmc_score[4]}')
             print(f'mAP score: {mAP_score}')
+            print('---------------------------------------------------------')
 
     return model

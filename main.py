@@ -16,7 +16,7 @@ from reid.dataset.market1501_trainval import Market1501TrainVal
 def main():
     model = Model(last_conv_stride=1)
 
-    optimizer = Adam(model.parameters(), lr=0.02, weight_decay=0.0005)
+    optimizer = Adam(model.parameters(), lr=0.0002, weight_decay=0.0005)
     scheduler = StepLR(optimizer, step_size=40, gamma=0.1)
     criterion = TripletLoss(0.3)
 
