@@ -16,6 +16,35 @@ def euclidean_dist(x, y):
     dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
     return dist
     
+def cosine_dist(x, y):
+    """
+    Compute element-wise cosine distance between 'x' and 'y'
+    Args:
+        x: pytorch Variable, with shape [m, d]
+        y: pytorch Variable, with shape [n, d]
+    Returns:
+        dist: pytorch Variable, with shape [m, n]
+    """
+    m, n = x.size(0), y.size(0)
+    x_norm = torch.nn.functional.normalize(x, dim=1)
+    y_norm = torch.nn.functional.normalize(y, dim=1)
+    dist = torch.ones([m, n], dtype=torch.float32) - torch.matmul(x_norm, y_norm.T)
+    return dist
+
+def cosine_similarity(x, y):
+    """
+    Compute element-wise cosine similarity between 'x' and 'y'
+    Args:
+        x: pytorch Variable, with shape [m, d]
+        y: pytorch Variable, with shape [n, d]
+    Returns:
+        dist: pytorch Variable, with shape [m, n]
+    """
+    m, n = x.size(0), y.size(0)
+    x_norm = torch.nn.functional.normalize(x, dim=1)
+    y_norm = torch.nn.functional.normalize(y, dim=1)
+    dist = torch.matmul(x_norm, y_norm.T)
+    return dist
 
 def hard_example_mining(dist_mat, labels):
     """For each anchor, find the hardest positive and negative sample.
@@ -51,7 +80,7 @@ def hard_example_mining(dist_mat, labels):
 
     return dist_ap, dist_an
 
-def global_loss(tri_loss, global_feat, labels):
+def global_loss(tri_loss, global_feat, labels, dist_func=euclidean_dist):
     """
     Args:
         tri_loss: a `TripletLoss` object
@@ -62,7 +91,7 @@ def global_loss(tri_loss, global_feat, labels):
         dist_ap: pytorch Variable, distance(anchor, positive); shape [N]
         dist_an: pytorch Variable, distance(anchor, negative); shape [N]
     """
-    dist_mat = euclidean_dist(global_feat, global_feat)
+    dist_mat = dist_func(global_feat, global_feat)
     dist_ap, dist_an = hard_example_mining(dist_mat, labels)
     loss = tri_loss(dist_ap, dist_an)
 

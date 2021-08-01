@@ -13,7 +13,7 @@ if torch.cuda.is_available():
 else:
     DEVICE = 'cpu'
 
-def valid_model(model, dataloader):
+def valid_model(model, dataloader, dist_func=euclidean_dist):
     # set model to evaluation mode
     model.eval()
     
@@ -44,7 +44,7 @@ def valid_model(model, dataloader):
     gallery_feat = torch.cat(gallery_feat)
     
     # calculate distance
-    dist_mat = euclidean_dist(query_feat, gallery_feat)
+    dist_mat = dist_func(query_feat, gallery_feat)
     
     # calculate rank-k precision
     cmc_score = cmc(dist_mat, dataloader.query_ids, dataloader.gallery_ids, dataloader.query_cams, dataloader.gallery_cams, topk=5, \
@@ -57,7 +57,7 @@ def valid_model(model, dataloader):
     model.train()
     return mAP, cmc_score
 
-def train_model(model, optimizer, criterion, scheduler, dataloader, n_epochs=100, val_interval=10):
+def train_model(model, optimizer, criterion, scheduler, dataloader, n_epochs=100, val_interval=10, dist_func=euclidean_dist):
 
     model.train()
 
@@ -94,7 +94,7 @@ def train_model(model, optimizer, criterion, scheduler, dataloader, n_epochs=100
         scheduler.step()
 
         if (epoch + 1) % val_interval == 0:
-            mAP_score, cmc_score = valid_model(model, dataloader)
+            mAP_score, cmc_score = valid_model(model, dataloader, dist_func=dist_func)
             print('-----------------------VALIDATION------------------------')
             print(f'Rank-1 score: {cmc_score[0]}')
             print(f'Rank-5 score: {cmc_score[4]}')
