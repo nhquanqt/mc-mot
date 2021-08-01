@@ -1,6 +1,7 @@
 import os, time
 
 import torch
+from torchvision.transforms.transforms import Pad, RandomCrop
 
 from reid.model import Model
 from reid.train import train_model
@@ -8,9 +9,9 @@ from reid.train import train_model
 from torchvision import transforms
 
 from torch.optim import Adam
-from reid.triplet_loss import TripletLoss
+from reid.model.triplet_loss import TripletLoss
 from torch.optim.lr_scheduler import StepLR
-from reid.market1501_trainval import Market1501TrainVal
+from reid.dataset.market1501_trainval import Market1501TrainVal
 
 def main():
     model = Model(last_conv_stride=1)
@@ -21,6 +22,8 @@ def main():
 
     transform_trainval = transforms.Compose([
         transforms.Resize([256, 128]),
+        transforms.Pad(10),
+        transforms.RandomCrop([256, 128]),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])

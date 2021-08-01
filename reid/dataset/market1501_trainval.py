@@ -4,7 +4,7 @@ from PIL import Image
 from torchvision import transforms
 import numpy as np
 
-from reid.utils import *
+from reid.utils.utils import *
 
 class Market1501TrainVal(Dataset):
     def __init__(self, root, transform=None, batch_size=32, shuffle=True):

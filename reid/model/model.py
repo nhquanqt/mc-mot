@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from reid.resnet import resnet50
+from reid.model.resnet import resnet50
 
 class Model(nn.Module):
     def __init__(self, last_conv_stride=2):
