@@ -29,6 +29,10 @@ class PRW():
 
             for bbox in bboxes:
                 id, x, y, w, h = map(int,bbox)
+
+                if id == -2:
+                    continue
+                
                 self.frame_bboxes[frame_file].append([id, x, y, w, h])
 
 

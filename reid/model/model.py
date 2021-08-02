@@ -5,9 +5,10 @@ import torch.nn.functional as F
 from reid.model.resnet import resnet50
 
 class Model(nn.Module):
-    def __init__(self, last_conv_stride=2):
+    def __init__(self, last_conv_stride=2, out_dim=512):
         super(Model, self).__init__()
         self.base = resnet50(pretrained=True, last_conv_stride=last_conv_stride)
+        self.dense = nn.Linear(2048, out_dim)
 
     def forward(self, x):
         # shape [N, C, H, W]
@@ -15,5 +16,7 @@ class Model(nn.Module):
         feat = F.avg_pool2d(feat, feat.size()[2:])
         # shape [N, C]
         feat = feat.view(x.size(0), -1)
+        # shape [N, out_dim]
+        feat = self.dense(feat)
 
         return feat
