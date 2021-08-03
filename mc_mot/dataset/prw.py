@@ -57,6 +57,9 @@ class PRW():
 
             images.append(image.unsqueeze(0))
         
+        if len(images) == 0:
+            return [], frame, bboxes
+
         if self.transform is not None:
             input_t = torch.cat(images)
             return input_t, frame, bboxes

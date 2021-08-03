@@ -18,6 +18,9 @@ from mc_mot.dataset.prw import PRW
 
 import cv2
 
+import matplotlib.pyplot as plt
+import networkx
+
 def test_reid():
     model = Model(last_conv_stride=1)
 
@@ -57,6 +60,9 @@ def test_mc_mot():
     for t_step in range(10000):
         input_t, frame, bboxes = prw[t_step]
 
+        if len(input_t) == 0:
+            continue
+
         track_ids = mot(input_t)
 
         for i in range(len(bboxes)):
@@ -69,11 +75,14 @@ def test_mc_mot():
         print(track_ids)
 
         cv2.imshow('', frame)
+        cv2.imwrite(os.path.join('data/output', '{:05d}.jpg'.format(t_step)), frame)
 
         key = cv2.waitKey(0)
         if key == 27:
             break
 
+    networkx.draw(mot.G, with_labels=True)
+    plt.show()
 
 def main():
     test_mc_mot()
