@@ -8,17 +8,17 @@ import networkx
 class MultipleObjectTracker():
     def __init__(self, feature_extractor, link_threshold=0.95):
         self.feature_extractor = feature_extractor
+        self.feature_extractor.eval()
         self.link_threshold = link_threshold
 
         self.nodes = []
         self.n_track_id = 0
         self.n_nodes = 0
 
-        # TODO: add graph for MOT, feature need saving to file for memory performance
         self.G = networkx.Graph()
 
     def __call__(self, x):
-        features = self.feature_extractor(x)
+        features = self.feature_extractor(x).detach()
         track_ids = -1 * torch.ones(features.size()[0])
 
         # TODO: remake feature matching
@@ -39,7 +39,6 @@ class MultipleObjectTracker():
         for i, feat in enumerate(features):
             self.nodes.append(Node(node_id=self.n_nodes, feature=feat, track_id=int(track_ids[i])))
 
-            # node feature will be saved to file
             self.G.add_nodes_from([(self.n_nodes, {
                 'feature': feat,
                 'track_id': track_ids[i]
