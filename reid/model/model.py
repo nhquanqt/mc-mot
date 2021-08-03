@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from reid.model.resnet import resnet50
 
 class Model(nn.Module):
-    def __init__(self, last_conv_stride=2, out_dim=512):
+    def __init__(self, last_conv_stride=2):
         super(Model, self).__init__()
         self.base = resnet50(pretrained=True, last_conv_stride=last_conv_stride)
 

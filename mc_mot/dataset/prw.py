@@ -12,7 +12,7 @@ class PRW():
         self.transform = transform
         self.frames = os.listdir(os.path.join(self.root, 'frames'))
 
-        self.frames = sorted(self.frames)[:100]
+        self.frames = sorted(self.frames)
         self.frame_bboxes = {}
 
         for frame_file in self.frames:

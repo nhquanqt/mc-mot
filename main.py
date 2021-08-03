@@ -54,7 +54,7 @@ def test_mc_mot():
 
     prw = PRW('/home/wan/datasets/PRW-v16.04.20', transform)
 
-    for t_step in range(100):
+    for t_step in range(10000):
         input_t, frame, bboxes = prw[t_step]
 
         track_ids = mot(input_t)
