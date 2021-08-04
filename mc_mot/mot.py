@@ -19,34 +19,45 @@ class MultipleObjectTracker():
 
         self.G = networkx.Graph()
 
+        # remember to load weight, until now model haven't trained yet
         self.gcn = GCN(2048, 1024, 512, 0.5)
         self.gcn.eval()
 
     def __call__(self, x):
         features = self.feature_extractor(x).detach()
-        n_features = features.size()[0]
+        n_new_nodes = features.size()[0]
 
-        track_ids = [-1 for _ in range(n_features)]
-        max_sim = [0 for _ in range(n_features)]
-        linked_node_id = [-1 for _ in range(n_features)]
+        self.add_nodes(features)
+
+        infer_features = self.graph_infer()
+
+        track_ids = [-1 for _ in range(n_new_nodes)]
+        max_sim = [0 for _ in range(n_new_nodes)]
+        linked_node_id = [-1 for _ in range(n_new_nodes)]
 
         # feature matching
         for node_id in self.G.nodes:
+            if node_id >= self.n_nodes - n_new_nodes:
+                continue
+
             node = self.G.nodes[node_id]
-            node_feature = self.node_features[node_id]
-            cos_sim = cosine_similarity(node_feature.unsqueeze(0), features).view(-1)
+            cos_sim = cosine_similarity(
+                infer_features[node_id].unsqueeze(0), 
+                infer_features[self.n_nodes - n_new_nodes:]).view(-1)
+
             ind = torch.argmax(cos_sim)
+
             if cos_sim[ind] > self.link_threshold and cos_sim[ind] > max_sim[ind]:
                 track_ids[ind] = node['track_id']
                 max_sim[ind] = cos_sim[ind]
                 linked_node_id[ind] = node_id
 
         # remove same track-id situations
-        for i in range(n_features):
+        for i in range(n_new_nodes):
             if track_ids[i] == -1:
                 continue
 
-            for j in range(i+1, n_features):
+            for j in range(i+1, n_new_nodes):
                 if track_ids[j] == -1:
                     continue
 
@@ -65,20 +76,26 @@ class MultipleObjectTracker():
                 track_ids[i] = self.n_track_id
                 self.n_track_id += 1
 
-        # add new node to graph
-        for i, feat in enumerate(features):
-            self.node_features.append(feat)
+        # update new node track id and link to graph
+        for node_id in range(self.n_nodes - n_new_nodes, self.n_nodes):
 
-            self.G.add_nodes_from([(self.n_nodes, {
+            i = node_id - (self.n_nodes - n_new_nodes)
+
+            self.G.add_nodes_from([(node_id, {
                 'track_id': track_ids[i]
             })])
 
             if linked_node_id[i] != -1:
                 self.G.add_edge(self.n_nodes, linked_node_id[i])
 
-            self.n_nodes += 1
-
         return track_ids
+
+    def add_nodes(self, features):
+        for i, feat in enumerate(features):
+            self.node_features.append(feat)
+            self.G.add_node(self.n_nodes)
+
+            self.n_nodes += 1
 
     def graph_infer(self):
         adj = networkx.to_scipy_sparse_matrix(self.G, format='coo')
