@@ -1,6 +1,8 @@
+import numpy as np
 import torch
 
 from reid.model.losses import cosine_similarity
+from gcn.models import GCN
 
 import networkx
 
@@ -13,7 +15,12 @@ class MultipleObjectTracker():
         self.n_track_id = 0
         self.n_nodes = 0
 
+        self.node_features = []
+
         self.G = networkx.Graph()
+
+        self.gcn = GCN(2048, 1024, 512, 0.5)
+        self.gcn.eval()
 
     def __call__(self, x):
         features = self.feature_extractor(x).detach()
@@ -26,7 +33,8 @@ class MultipleObjectTracker():
         # feature matching
         for node_id in self.G.nodes:
             node = self.G.nodes[node_id]
-            cos_sim = cosine_similarity(node['feature'].unsqueeze(0), features).view(-1)
+            node_feature = self.node_features[node_id]
+            cos_sim = cosine_similarity(node_feature.unsqueeze(0), features).view(-1)
             ind = torch.argmax(cos_sim)
             if cos_sim[ind] > self.link_threshold and cos_sim[ind] > max_sim[ind]:
                 track_ids[ind] = node['track_id']
@@ -59,8 +67,9 @@ class MultipleObjectTracker():
 
         # add new node to graph
         for i, feat in enumerate(features):
+            self.node_features.append(feat)
+
             self.G.add_nodes_from([(self.n_nodes, {
-                'feature': feat,
                 'track_id': track_ids[i]
             })])
 
@@ -70,3 +79,18 @@ class MultipleObjectTracker():
             self.n_nodes += 1
 
         return track_ids
+
+    def graph_infer(self):
+        adj = networkx.to_scipy_sparse_matrix(self.G, format='coo')
+
+        indices = np.vstack((adj.row, adj.col))
+        values = adj.data
+
+        i = torch.LongTensor(indices)
+        v = torch.FloatTensor(values)
+        shape = adj.shape
+
+        adj = torch.sparse_coo_tensor(i, v, shape)
+        
+        return self.gcn(torch.cat(self.node_features).view(-1, 2048), adj)
+        
