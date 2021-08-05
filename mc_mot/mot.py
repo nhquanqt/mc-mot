@@ -7,7 +7,7 @@ from gcn.models import GCN
 import networkx
 
 class MultipleObjectTracker():
-    def __init__(self, feature_extractor, link_threshold=0.96):
+    def __init__(self, feature_extractor, link_threshold=0.8):
         self.feature_extractor = feature_extractor
         self.feature_extractor.eval()
         self.link_threshold = link_threshold
@@ -23,13 +23,16 @@ class MultipleObjectTracker():
         self.gcn = GCN(2048, 1024, 512, 0.5)
         self.gcn.eval()
 
-    def __call__(self, x):
+    def __call__(self, x, use_gcn=True):
         features = self.feature_extractor(x).detach()
         n_new_nodes = features.size()[0]
 
         self.add_nodes(features)
 
-        infer_features = self.graph_infer()
+        if use_gcn:
+            infer_features = self.graph_infer()
+        else:
+            infer_features = torch.stack(self.node_features)
 
         track_ids = [-1 for _ in range(n_new_nodes)]
         max_sim = [0 for _ in range(n_new_nodes)]
@@ -86,7 +89,7 @@ class MultipleObjectTracker():
             })])
 
             if linked_node_id[i] != -1:
-                self.G.add_edge(self.n_nodes, linked_node_id[i])
+                self.G.add_edge(node_id, linked_node_id[i])
 
         return track_ids
 

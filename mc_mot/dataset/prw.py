@@ -35,6 +35,8 @@ class PRW():
                 
                 self.frame_bboxes[frame_file].append([id, x, y, w, h])
 
+    def __len__(self):
+        return len(self.frames)
 
     def __getitem__(self, index):
         frame = Image.open(os.path.join(self.root, 'frames', self.frames[index]))

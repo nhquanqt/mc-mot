@@ -44,8 +44,8 @@ def test_reid():
 def test_mc_mot():
     feature_extractor = Model(last_conv_stride=1)
 
-    checkpoint = torch.load('/home/wan/Thesis/project/mc-mot-baseline/reid/data/checkpoint_cosine_100.pth', map_location='cpu')
-    feature_extractor.load_state_dict(checkpoint['model_state_dict'])
+    checkpoint = torch.load('reid/data/model_weight.pth', map_location='cpu')
+    feature_extractor.load_state_dict(checkpoint)
 
     mot = MultipleObjectTracker(feature_extractor)
 

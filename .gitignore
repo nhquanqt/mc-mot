@@ -139,5 +139,6 @@ cython_debug/
 
 # other
 *.pth
+data/
 output/
 .tmp/
