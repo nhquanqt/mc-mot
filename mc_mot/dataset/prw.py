@@ -43,6 +43,8 @@ class PRW():
 
         frame = cv2.cvtColor(np.array(frame), cv2.COLOR_BGR2RGB)
 
+        im_h, im_w, _ = frame.shape
+
         frame_t = transforms.ToTensor()(frame)
 
         bboxes = self.frame_bboxes[self.frames[index]]
@@ -51,6 +53,12 @@ class PRW():
 
         for bbox in bboxes:
             id, x, y, w, h = bbox
+            
+            x = max(x,0)
+            y = max(y,0)
+            w = min(im_w-x,w)
+            h = min(im_h-y,h)
+
             image = frame_t[:, y:y+h, x:x+w]
 
             if self.transform is not None:

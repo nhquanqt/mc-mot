@@ -1,3 +1,4 @@
+from gat.models import GAT
 import numpy as np
 import torch
 
@@ -20,7 +21,11 @@ class MultipleObjectTracker():
         self.G = networkx.Graph()
 
         # remember to load weight, until now model haven't trained yet
-        self.gcn = GCN(2048, 1024, 512, 0.5)
+        # self.gcn = GCN(2048, 1024, 512, 0.5)
+        # self.gcn.load_state_dict(torch.load('gcn/data/gcn_weight.pth', map_location='cpu'))
+        # self.gcn.eval()
+        self.gcn = GAT(2048, 8, 512, 0.1, 0.2, 8)
+        self.gcn.load_state_dict(torch.load('gat/data/gat_weight.pth', map_location='cpu'))
         self.gcn.eval()
 
     def __call__(self, x, use_gcn=True):
@@ -98,6 +103,9 @@ class MultipleObjectTracker():
             self.node_features.append(feat)
             self.G.add_node(self.n_nodes)
 
+            # add self-loop
+            self.G.add_edge(self.n_nodes, self.n_nodes)
+
             self.n_nodes += 1
 
     def graph_infer(self):
@@ -112,5 +120,5 @@ class MultipleObjectTracker():
 
         adj = torch.sparse_coo_tensor(i, v, shape)
         
-        return self.gcn(torch.cat(self.node_features).view(-1, 2048), adj)
+        return self.gcn(torch.cat(self.node_features).view(-1, 2048), adj.to_dense())
         
