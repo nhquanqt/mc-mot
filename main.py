@@ -72,7 +72,7 @@ def test_mc_mot():
             frame = cv2.rectangle(frame, (x, y-20), (x+40, y-1), (127, 127, 127), -1)
             frame = cv2.putText(frame, f'{track_id}', (x+2, y-2), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 0.75, (0, 255, 0), 2)
 
-        print(track_ids)
+        print(t_step, track_ids)
 
         cv2.imshow('', frame)
         cv2.imwrite(os.path.join('data/output', '{:05d}.jpg'.format(t_step)), frame)

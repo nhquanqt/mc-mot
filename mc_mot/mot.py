@@ -1,9 +1,8 @@
-from gat.models import GAT
 import numpy as np
 import torch
 
 from reid.model.losses import cosine_similarity
-from gcn.models import GCN
+from gat.models import GAT
 
 import networkx
 
@@ -21,11 +20,8 @@ class MultipleObjectTracker():
         self.G = networkx.Graph()
 
         # remember to load weight, until now model haven't trained yet
-        # self.gcn = GCN(2048, 1024, 512, 0.5)
-        # self.gcn.load_state_dict(torch.load('gcn/data/gcn_weight.pth', map_location='cpu'))
-        # self.gcn.eval()
-        self.gcn = GAT(2048, 8, 512, 0.1, 0.2, 8)
-        self.gcn.load_state_dict(torch.load('gat/data/gat_weight.pth', map_location='cpu'))
+        self.gcn = GAT(2048, 8, 2048, 0.1, 0.2, 8)
+        self.gcn.load_state_dict(torch.load('gat/data/gat_2048_weight.pth', map_location='cpu'))
         self.gcn.eval()
 
     def __call__(self, x, use_gcn=True):
@@ -35,7 +31,7 @@ class MultipleObjectTracker():
         self.add_nodes(features)
 
         if use_gcn:
-            infer_features = self.graph_infer()
+            infer_features = self.graph_infer().detach()
         else:
             infer_features = torch.stack(self.node_features)
 
@@ -49,9 +45,14 @@ class MultipleObjectTracker():
                 continue
 
             node = self.G.nodes[node_id]
-            cos_sim = cosine_similarity(
+
+            # cos_sim = cosine_similarity(
+            #     infer_features[node_id].unsqueeze(0), 
+            #     infer_features[self.n_nodes - n_new_nodes:]).view(-1)
+
+            cos_sim = torch.sigmoid(torch.mm(
                 infer_features[node_id].unsqueeze(0), 
-                infer_features[self.n_nodes - n_new_nodes:]).view(-1)
+                infer_features[self.n_nodes - n_new_nodes:].T).view(-1))
 
             ind = torch.argmax(cos_sim)
 
