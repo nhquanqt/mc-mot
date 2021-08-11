@@ -108,28 +108,34 @@ class SelfAttentionLayer(nn.Module):
         self.out_dim = out_dim
         self.has_mask = has_mask
 
-        self.W_query = nn.Parameter(torch.empty(size=(in_dim, out_dim)))
-        self.W_key = nn.Parameter(torch.empty(size=(in_dim, out_dim)))
-        self.W_value = nn.Parameter(torch.empty(size=(in_dim, out_dim)))
+        self.W_query = nn.Linear(in_dim, out_dim, bias=False)
+        self.W_key = nn.Linear(in_dim, out_dim, bias=False)
+        self.W_value = nn.Linear(in_dim, out_dim, bias=False)
 
     def forward(self, x):
-        # x shape: (N, in_dim)
+        # x shape: (batch_size, N, in_dim)
 
-        n = x.size()[0]
+        n = x.size()[1]
 
-        t_query = torch.mm(x, self.W_query) # (N, out_dim)
-        t_key = torch.mm(x, self.W_key) # (N, out_dim)
-        t_value = torch.mm(x, self.W_value) # (N, out_dim)
+        t_query = self.W_query(x) # (batch_size, N, out_dim)
+        t_key = self.W_key(x) # (batch_size, N, out_dim)
+        t_value = self.W_value(x) # (batch_size, N, out_dim)
 
         sqrt_d = torch.sqrt(torch.tensor(self.out_dim, dtype=torch.float32))
         if not self.has_mask:
-            # dim 0 or dim 1?
-            attn = torch.softmax(torch.mm(t_query, t_key.T) / sqrt_d, dim=1) # (N, N)
+            attn = torch.softmax(
+                torch.bmm(t_query, t_key.transpose(1, 2)) / sqrt_d, dim=2
+            ) # (batch_size, N, N)
         else:
-            mask = torch.triu(-1e9 * torch.ones(n, n))
-            attn = torch.softmax(torch.mm(t_query, t_key.T) / sqrt_d + mask, dim=1) # (N, N)
+            mask = torch.stack([
+                torch.tril(-1e9 * torch.ones(n, n), diagonal=-1) 
+                for _ in range(x.size()[0])
+            ])
+            attn = torch.softmax(
+                torch.bmm(t_query, t_key.transpose(1, 2)) / sqrt_d + mask, dim=2
+            ) # (batch_size, N, N)
 
-        return torch.mm(attn, t_value) # (N, out_dim)
+        return torch.bmm(attn, t_value) # (N, out_dim)
 
 
 class TemporalAttentionLayer(nn.Module):
@@ -156,7 +162,7 @@ class TemporalAttentionLayer(nn.Module):
 if __name__=='__main__':
     model = TemporalAttentionLayer(8, 2048, 512)
 
-    x = torch.randn(3, 2048)
+    x = torch.randn(100, 3, 2048)
 
     e = model(x)
     print(e)
