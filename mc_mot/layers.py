@@ -141,8 +141,11 @@ class SelfAttentionLayer(nn.Module):
 
 
 class TemporalAttentionLayer(nn.Module):
-    def __init__(self, n_heads, in_dim, out_dim):
+    def __init__(self, n_heads, in_dim, out_dim, n_time_steps=3):
         super(TemporalAttentionLayer, self).__init__()
+
+        self.n_time_steps = n_time_steps
+        self.pos_embedding = nn.Embedding(n_time_steps, in_dim)
 
         self.attention_heads = [
             SelfAttentionLayer(in_dim, out_dim, has_mask=True) 
@@ -155,6 +158,14 @@ class TemporalAttentionLayer(nn.Module):
         self.ffn = nn.Linear(n_heads * out_dim, out_dim)
 
     def forward(self, x):
+        device = x.device
+
+        batch_size = x.size()[0]
+
+        pos_input = torch.arange(0, self.n_time_steps).view(1, -1).repeat(batch_size, 1).long().to(device)
+
+        x += self.pos_embedding(pos_input)
+
         features = []
         for head in self.attention_heads:
             z = head(x)
