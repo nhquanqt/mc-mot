@@ -115,6 +115,8 @@ class SelfAttentionLayer(nn.Module):
     def forward(self, x):
         # x shape: (batch_size, N, in_dim)
 
+        device = x.device
+
         n = x.size()[1]
 
         t_query = self.W_query(x) # (batch_size, N, out_dim)
@@ -124,18 +126,18 @@ class SelfAttentionLayer(nn.Module):
         sqrt_d = torch.sqrt(torch.tensor(self.out_dim, dtype=torch.float32))
         if not self.has_mask:
             attn = torch.softmax(
-                torch.bmm(t_query, t_key.transpose(1, 2)) / sqrt_d, dim=2
+                torch.bmm(t_query, t_key.transpose(1, 2)) / sqrt_d, dim=1
             ) # (batch_size, N, N)
         else:
             mask = torch.stack([
                 torch.tril(-1e9 * torch.ones(n, n), diagonal=-1) 
                 for _ in range(x.size()[0])
-            ])
+            ]).to(device)
             attn = torch.softmax(
-                torch.bmm(t_query, t_key.transpose(1, 2)) / sqrt_d + mask, dim=2
+                torch.bmm(t_query, t_key.transpose(1, 2)) / sqrt_d + mask, dim=1
             ) # (batch_size, N, N)
 
-        return torch.bmm(attn, t_value) # (N, out_dim)
+        return torch.bmm(attn.transpose(1, 2), t_value) # (batch_size, N, out_dim)
 
 
 class TemporalAttentionLayer(nn.Module):
@@ -147,6 +149,9 @@ class TemporalAttentionLayer(nn.Module):
             for _ in range(n_heads)
         ]
 
+        for i, attention in enumerate(self.attention_heads):
+            self.add_module('attention_heads_{}'.format(i), attention)
+
         self.ffn = nn.Linear(n_heads * out_dim, out_dim)
 
     def forward(self, x):
@@ -155,9 +160,9 @@ class TemporalAttentionLayer(nn.Module):
             z = head(x)
             features.append(z.T)
 
-        features = torch.cat(features).T # (W, n_heads * out_dim)
+        features = torch.cat(features).T # (batch_size, W, n_heads * out_dim)
 
-        return self.ffn(features) # (W, out_dim)
+        return self.ffn(features) # (batch_size, W, out_dim)
 
 if __name__=='__main__':
     model = TemporalAttentionLayer(8, 2048, 512)
