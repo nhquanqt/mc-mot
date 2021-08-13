@@ -1,10 +1,11 @@
 import numpy as np
 import torch
 
-from reid.model.losses import cosine_similarity
 from gat.models import GAT
+from mc_mot.layers import StructuralAttentionLayer
+from mc_mot.layers import TemporalAttentionLayer
 
-import networkx
+import networkx as nx
 
 class MultipleObjectTracker():
     def __init__(self, feature_extractor, link_threshold=0.8):
@@ -17,21 +18,32 @@ class MultipleObjectTracker():
 
         self.node_features = []
 
-        self.G = networkx.Graph()
+        self.G = nx.Graph()
 
-        # remember to load weight, until now model haven't trained yet
-        self.gcn = GAT(2048, 8, 2048, 0.1, 0.2, 8)
-        self.gcn.load_state_dict(torch.load('gat/data/gat_2048_weight.pth', map_location='cpu'))
-        self.gcn.eval()
+        self.gat = GAT(2048, 8, 2048, 0.1, 0.2, 8)
+        self.gat.load_state_dict(torch.load('gat/data/gat_2048_weight.pth', map_location='cpu'))
+        self.gat.eval()
 
-    def __call__(self, x, use_gcn=True):
+        self.SAL = StructuralAttentionLayer(2048, 8, 1024, 0.1, 0.2, 8)
+        self.SAL.load_state_dict(torch.load('mc_mot/data/SAL_weight.pth', map_location='cpu'))
+        self.SAL.eval()
+
+        self.TAL = TemporalAttentionLayer(8, 1024, 512)
+        self.TAL.load_state_dict(torch.load('mc_mot/data/TAL_weight.pth', map_location='cpu'))
+        self.TAL.eval()
+
+        self.h_adj = []
+        self.h_features = []
+
+    def __call__(self, x, use_gnn=True):
         features = self.feature_extractor(x).detach()
         n_new_nodes = features.size()[0]
 
         self.add_nodes(features)
 
-        if use_gcn:
-            infer_features = self.graph_infer().detach()
+        if use_gnn:
+            # infer_features = self.gat_infer().detach()
+            infer_features = self.stgat_infer().detach()
         else:
             infer_features = torch.stack(self.node_features)
 
@@ -109,8 +121,8 @@ class MultipleObjectTracker():
 
             self.n_nodes += 1
 
-    def graph_infer(self):
-        adj = networkx.to_scipy_sparse_matrix(self.G, format='coo')
+    def gat_infer(self):
+        adj = nx.to_scipy_sparse_matrix(self.G, format='coo')
 
         indices = np.vstack((adj.row, adj.col))
         values = adj.data
@@ -121,5 +133,37 @@ class MultipleObjectTracker():
 
         adj = torch.sparse_coo_tensor(i, v, shape)
         
-        return self.gcn(torch.cat(self.node_features).view(-1, 2048), adj.to_dense())
+        return self.gat(torch.cat(self.node_features).view(-1, 2048), adj.to_dense())
         
+    def stgat_infer(self):
+        self.h_features.append(self.node_features.copy())
+        self.h_adj.append(torch.tensor(nx.to_numpy_matrix(self.G), dtype=torch.float32))
+
+        if len(self.h_adj) > 3:
+            self.h_features.pop(0)
+            self.h_adj.pop(0)
+
+        if len(self.h_adj) == 3:
+            h = []
+
+            for i in range(len(self.h_adj)):
+                adj = self.h_adj[i]
+                features = torch.cat(self.h_features[i]).view(-1, 2048)
+
+                infered_features = self.SAL(features, adj)
+
+                if infered_features.size()[0] < self.n_nodes:
+                    infered_features = torch.cat([
+                        infered_features, 
+                        torch.zeros(self.n_nodes - infered_features.size()[0], 1024)
+                    ])
+
+                h.append(infered_features)
+
+            input_t = torch.stack(h).transpose(0,1)
+
+            embedding = self.TAL(input_t)
+
+            return embedding[:, -1]
+        else:
+            return self.gat_infer()
