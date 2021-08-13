@@ -101,12 +101,14 @@ class StructuralAttentionLayer(nn.Module):
 
 
 class SelfAttentionLayer(nn.Module):
-    def __init__(self, in_dim, out_dim, has_mask=False):
+    def __init__(self, in_dim, out_dim, dropout=0.1, has_mask=False):
         super(SelfAttentionLayer, self).__init__()
 
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.has_mask = has_mask
+
+        self.dropout = dropout
 
         self.W_query = nn.Linear(in_dim, out_dim, bias=False)
         self.W_key = nn.Linear(in_dim, out_dim, bias=False)
@@ -137,18 +139,20 @@ class SelfAttentionLayer(nn.Module):
                 torch.bmm(t_query, t_key.transpose(1, 2)) / sqrt_d + mask, dim=1
             ) # (batch_size, N, N)
 
+        attn = torch.dropout(attn, self.dropout, train=self.training)
+
         return torch.bmm(attn.transpose(1, 2), t_value) # (batch_size, N, out_dim)
 
 
 class TemporalAttentionLayer(nn.Module):
-    def __init__(self, n_heads, in_dim, out_dim, n_time_steps=3):
+    def __init__(self, n_heads, in_dim, out_dim, n_time_steps=3, dropout=0.1):
         super(TemporalAttentionLayer, self).__init__()
 
         self.n_time_steps = n_time_steps
         self.pos_embedding = nn.Embedding(n_time_steps, in_dim)
 
         self.attention_heads = [
-            SelfAttentionLayer(in_dim, out_dim, has_mask=True) 
+            SelfAttentionLayer(in_dim, out_dim, dropout=dropout, has_mask=True) 
             for _ in range(n_heads)
         ]
 
