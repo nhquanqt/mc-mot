@@ -8,10 +8,13 @@ from mc_mot.layers import TemporalAttentionLayer
 import networkx as nx
 
 class MultipleObjectTracker():
-    def __init__(self, feature_extractor, link_threshold=0.8):
+    def __init__(self, feature_extractor, feature_dim=512, hidden_dim=512, embedding_dim=512):
         self.feature_extractor = feature_extractor
         self.feature_extractor.eval()
-        self.link_threshold = link_threshold
+
+        self.feature_dim = feature_dim
+        self.hidden_dim = hidden_dim
+        self.embedding_dim = embedding_dim
 
         self.n_track_id = 0
         self.n_nodes = 0
@@ -20,32 +23,31 @@ class MultipleObjectTracker():
 
         self.G = nx.Graph()
 
-        self.gat = GAT(2048, 8, 2048, 0.1, 0.2, 8)
-        self.gat.load_state_dict(torch.load('gat/data/gat_2048_weight.pth', map_location='cpu'))
+        self.gat = GAT(feature_dim, 8, embedding_dim, 0.1, 0.2, 8)
+        self.gat.load_state_dict(torch.load('gat/data/gat_weight_v2.pth', map_location='cpu'))
         self.gat.eval()
 
-        self.SAL = StructuralAttentionLayer(2048, 8, 1024, 0.1, 0.2, 8)
-        self.SAL.load_state_dict(torch.load('mc_mot/data/SAL_weight.pth', map_location='cpu'))
+        self.SAL = StructuralAttentionLayer(feature_dim, 8, hidden_dim, 0.1, 0.2, 8)
+        self.SAL.load_state_dict(torch.load('mc_mot/data/SAL_weight_v2.pth', map_location='cpu'))
         self.SAL.eval()
 
-        self.TAL = TemporalAttentionLayer(8, 1024, 512)
-        self.TAL.load_state_dict(torch.load('mc_mot/data/TAL_weight.pth', map_location='cpu'))
+        self.TAL = TemporalAttentionLayer(8, hidden_dim, embedding_dim)
+        self.TAL.load_state_dict(torch.load('mc_mot/data/TAL_weight_v2.pth', map_location='cpu'))
         self.TAL.eval()
 
         self.h_adj = []
         self.h_features = []
 
-    def __call__(self, x, use_gnn=True):
+    def __call__(self, x, link_threshold=0.8, use_stgat=True):
         features = self.feature_extractor(x).detach()
         n_new_nodes = features.size()[0]
 
         self.add_nodes(features)
 
-        if use_gnn:
-            # infer_features = self.gat_infer().detach()
+        if use_stgat:
             infer_features = self.stgat_infer().detach()
         else:
-            infer_features = torch.stack(self.node_features)
+            infer_features = self.gat_infer().detach()
 
         track_ids = [-1 for _ in range(n_new_nodes)]
         max_sim = [0 for _ in range(n_new_nodes)]
@@ -58,19 +60,15 @@ class MultipleObjectTracker():
 
             node = self.G.nodes[node_id]
 
-            # cos_sim = cosine_similarity(
-            #     infer_features[node_id].unsqueeze(0), 
-            #     infer_features[self.n_nodes - n_new_nodes:]).view(-1)
-
-            cos_sim = torch.sigmoid(torch.mm(
+            sim = torch.sigmoid(torch.mm(
                 infer_features[node_id].unsqueeze(0), 
                 infer_features[self.n_nodes - n_new_nodes:].T).view(-1))
 
-            ind = torch.argmax(cos_sim)
+            ind = torch.argmax(sim)
 
-            if cos_sim[ind] > self.link_threshold and cos_sim[ind] > max_sim[ind]:
+            if sim[ind] > link_threshold and sim[ind] > max_sim[ind]:
                 track_ids[ind] = node['track_id']
-                max_sim[ind] = cos_sim[ind]
+                max_sim[ind] = sim[ind]
                 linked_node_id[ind] = node_id
 
         # remove same track-id situations
@@ -109,6 +107,14 @@ class MultipleObjectTracker():
             if linked_node_id[i] != -1:
                 self.G.add_edge(node_id, linked_node_id[i])
 
+            # for j in range(self.n_nodes - n_new_nodes):
+            #     if self.G.nodes[j]['track_id'] == track_ids[i] and j != linked_node_id[i]:
+            #         sim = torch.sigmoid(
+            #             torch.mm(infer_features[node_id].unsqueeze(0), 
+            #                     infer_features[j].unsqueeze(0).T).view(-1))
+            #         if sim > link_threshold:
+            #             self.G.add_edge(node_id, j)
+
         return track_ids
 
     def add_nodes(self, features):
@@ -133,7 +139,7 @@ class MultipleObjectTracker():
 
         adj = torch.sparse_coo_tensor(i, v, shape)
         
-        return self.gat(torch.cat(self.node_features).view(-1, 2048), adj.to_dense())
+        return self.gat(torch.cat(self.node_features).view(-1, self.feature_dim), adj.to_dense())
         
     def stgat_infer(self):
         self.h_features.append(self.node_features.copy())
@@ -148,14 +154,14 @@ class MultipleObjectTracker():
 
             for i in range(len(self.h_adj)):
                 adj = self.h_adj[i]
-                features = torch.cat(self.h_features[i]).view(-1, 2048)
+                features = torch.cat(self.h_features[i]).view(-1, self.feature_dim)
 
                 infered_features = self.SAL(features, adj)
 
                 if infered_features.size()[0] < self.n_nodes:
                     infered_features = torch.cat([
                         infered_features, 
-                        torch.zeros(self.n_nodes - infered_features.size()[0], 1024)
+                        torch.zeros(self.n_nodes - infered_features.size()[0], self.hidden_dim)
                     ])
 
                 h.append(infered_features)
