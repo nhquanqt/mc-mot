@@ -4,9 +4,9 @@ The project is built based on  the idea of the paper: [DyGLIP: A Dynamic Graph M
 
 <b>Note</b>: The project is still in construction.
 
-## Demo
+## Example
 
-A short demo on PRW dataset:
+A short example on PRW dataset:
 
 ![A short demo on PRW dataset](assets/demo_prw.gif)
 
