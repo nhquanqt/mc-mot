@@ -1,16 +1,20 @@
 # Multiple Object Tracking using Structural-Temporal Graph Attention
 
-The project is built based on  the idea of [DyGLIP: A Dynamic Graph Model with Link Prediction for Accurate Multi-Camera Multiple Object Tracking](https://arxiv.org/abs/2106.06856)
+The project is built based on  the idea of the paper: [DyGLIP: A Dynamic Graph Model with Link Prediction for Accurate Multi-Camera Multiple Object Tracking](https://arxiv.org/abs/2106.06856).
+
+<b>Note</b>: The project is still in construction.
 
 ## Demo
+
+A short demo on PRW dataset:
 
 ![A short demo on PRW dataset](assets/demo_prw.gif)
 
 ## Todo list
 
 - [ ] Add evaluation metrics
-- [ ] Re-train model
-- [ ] Test model on Campus dataset
+- [ ] Re-train model on MARS dataset
+- [ ] Test model on CAMPUS dataset
 
 ## References
 
