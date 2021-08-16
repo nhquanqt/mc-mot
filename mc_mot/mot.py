@@ -27,12 +27,12 @@ class MultipleObjectTracker():
         self.gat.load_state_dict(torch.load('gat/data/gat_weight_v2.pth', map_location='cpu'))
         self.gat.eval()
 
-        self.SAL = StructuralAttentionLayer(feature_dim, 8, hidden_dim, 0.1, 0.2, 8)
-        self.SAL.load_state_dict(torch.load('mc_mot/data/SAL_weight_v2.pth', map_location='cpu'))
+        self.SAL = StructuralAttentionLayer(feature_dim, 8, hidden_dim, 8)
+        # self.SAL.load_state_dict(torch.load('mc_mot/data/SAL_weight_v2.pth', map_location='cpu'))
         self.SAL.eval()
 
         self.TAL = TemporalAttentionLayer(8, hidden_dim, embedding_dim)
-        self.TAL.load_state_dict(torch.load('mc_mot/data/TAL_weight_v2.pth', map_location='cpu'))
+        # self.TAL.load_state_dict(torch.load('mc_mot/data/TAL_weight_v2.pth', map_location='cpu'))
         self.TAL.eval()
 
         self.h_adj = []
