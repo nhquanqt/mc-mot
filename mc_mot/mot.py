@@ -8,7 +8,7 @@ from mc_mot.layers import TemporalAttentionLayer
 import networkx as nx
 
 class MultipleObjectTracker():
-    def __init__(self, feature_extractor, feature_dim=512, hidden_dim=512, embedding_dim=512):
+    def __init__(self, feature_extractor, feature_dim=512, hidden_dim=128, embedding_dim=8):
         self.feature_extractor = feature_extractor
         self.feature_extractor.eval()
 
@@ -23,24 +23,26 @@ class MultipleObjectTracker():
 
         self.G = nx.Graph()
 
-        self.gat = GAT(feature_dim, 8, embedding_dim, 0.1, 0.2, 8)
-        self.gat.load_state_dict(torch.load('gat/data/gat_weight_v2.pth', map_location='cpu'))
+        self.gat = GAT(feature_dim, 8, 512, 0.1, 0.2, 8)
+        self.gat.load_state_dict(torch.load('gat/data/gat_weight.pth', map_location='cpu'))
         self.gat.eval()
 
-        self.SAL = StructuralAttentionLayer(feature_dim, 8, hidden_dim, 8)
-        # self.SAL.load_state_dict(torch.load('mc_mot/data/SAL_weight_v2.pth', map_location='cpu'))
+        sal_heads = feature_dim // hidden_dim
+        self.SAL = StructuralAttentionLayer(feature_dim, hidden_dim, hidden_dim, sal_heads)
+        self.SAL.load_state_dict(torch.load('mc_mot/data/SAL_weight_v2.pth', map_location='cpu'))
         self.SAL.eval()
 
-        self.TAL = TemporalAttentionLayer(8, hidden_dim, embedding_dim)
-        # self.TAL.load_state_dict(torch.load('mc_mot/data/TAL_weight_v2.pth', map_location='cpu'))
+        tal_heads = hidden_dim // embedding_dim
+        self.TAL = TemporalAttentionLayer(tal_heads, hidden_dim, embedding_dim)
+        self.TAL.load_state_dict(torch.load('mc_mot/data/TAL_weight_v2.pth', map_location='cpu'))
         self.TAL.eval()
 
-        self.h_adj = []
-        self.h_features = []
+        self.h_adj = [None for _ in range(3)]
+        self.h_features = [torch.zeros(1, self.hidden_dim) for _ in range(3)]
 
     def __call__(self, x, link_threshold=0.8, use_stgat=True):
         features = self.feature_extractor(x).detach()
-        n_new_nodes = features.size()[0]
+        n_new_nodes = features.size(0)
 
         self.add_nodes(features)
 
@@ -149,27 +151,27 @@ class MultipleObjectTracker():
             self.h_features.pop(0)
             self.h_adj.pop(0)
 
-        if len(self.h_adj) == 3:
-            h = []
+        h = []
 
-            for i in range(len(self.h_adj)):
-                adj = self.h_adj[i]
+        for i in range(len(self.h_adj)):
+            adj = self.h_adj[i]
+
+            if adj is not None:
                 features = torch.cat(self.h_features[i]).view(-1, self.feature_dim)
-
                 infered_features = self.SAL(features, adj)
+            else:
+                infered_features = torch.tensor(self.h_features[i])
 
-                if infered_features.size()[0] < self.n_nodes:
-                    infered_features = torch.cat([
-                        infered_features, 
-                        torch.zeros(self.n_nodes - infered_features.size()[0], self.hidden_dim)
-                    ])
+            if infered_features.size(0) < self.n_nodes:
+                infered_features = torch.cat([
+                    infered_features, 
+                    torch.zeros(self.n_nodes - infered_features.size(0), self.hidden_dim)
+                ])
 
-                h.append(infered_features)
+            h.append(infered_features)
 
-            input_t = torch.stack(h).transpose(0,1)
+        input_t = torch.stack(h).transpose(0,1)
 
-            embedding = self.TAL(input_t)
+        embedding = self.TAL(input_t)
 
-            return embedding[:, -1]
-        else:
-            return self.gat_infer()
+        return embedding[:, -1]
