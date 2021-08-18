@@ -75,12 +75,6 @@ class SelfAttentionLayer(nn.Module):
         self.W_value = nn.Parameter(torch.empty(size=(in_dim, out_dim)))
         nn.init.xavier_uniform_(self.W_value.data, gain=1.414)
 
-        self.ffn = nn.Sequential(
-            nn.Linear(out_dim + in_dim, out_dim),
-            nn.ReLU(),
-            nn.Linear(out_dim, out_dim)
-        )
-
     def forward(self, x):
         # x shape: (batch_size, N, in_dim)
 
@@ -100,9 +94,7 @@ class SelfAttentionLayer(nn.Module):
 
         attn = torch.dropout(attn, self.dropout, train=self.training)
 
-        out = torch.bmm(attn, t_value) # (batch_size, N, out_dim)
-
-        return self.ffn(torch.cat([out, x], dim=-1)) # (batch_size, N, out_dim)
+        return torch.bmm(attn, t_value) # (batch_size, N, out_dim)
 
 
 class TemporalAttentionLayer(nn.Module):
@@ -120,7 +112,11 @@ class TemporalAttentionLayer(nn.Module):
         for i, attention in enumerate(self.attention_heads):
             self.add_module('attention_heads_{}'.format(i), attention)
 
+        self.ffn = nn.Linear(n_heads*out_dim + in_dim, n_heads*out_dim),
+
         self.out_attn = SelfAttentionLayer(out_dim*n_heads, out_dim, dropout=dropout)
+
+        self.ffn_out = nn.Linear(out_dim + in_dim, out_dim),
         
 
     def forward(self, x):
@@ -134,7 +130,11 @@ class TemporalAttentionLayer(nn.Module):
 
         features = torch.cat([head(x) for head in self.attention_heads], dim=-1) # (batch_size, W, n_heads * out_dim)
 
-        return self.out_attn(features) # (batch_size, W, out_dim)
+        features = self.ffn(torch.cat([features, x], dim=-1))
+
+        out = self.out_attn(features) # (batch_size, W, out_dim)
+
+        return self.ffn_out(torch.cat([out, x], dim=-1)) # (batch_size, W, out_dim)
 
 if __name__=='__main__':
     model = TemporalAttentionLayer(16, 128, 8)
