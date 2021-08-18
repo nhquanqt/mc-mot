@@ -112,11 +112,11 @@ class TemporalAttentionLayer(nn.Module):
         for i, attention in enumerate(self.attention_heads):
             self.add_module('attention_heads_{}'.format(i), attention)
 
-        self.ffn = nn.Linear(n_heads*out_dim + in_dim, n_heads*out_dim),
+        self.ffn = nn.Linear(n_heads*out_dim + in_dim, n_heads*out_dim)
 
         self.out_attn = SelfAttentionLayer(out_dim*n_heads, out_dim, dropout=dropout)
 
-        self.ffn_out = nn.Linear(out_dim + in_dim, out_dim),
+        self.ffn_out = nn.Linear(out_dim + in_dim, out_dim)
         
 
     def forward(self, x):
