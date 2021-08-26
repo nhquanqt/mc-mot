@@ -24,8 +24,23 @@ class StructuralAttentionLayer(nn.Module):
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
     def forward(self, features, adj):
-        # features.shape:   (W, N, in_dim)
-        # adj.shape:        (W, N, N)
+        # features.shape:   (B, W, N, in_dim)
+        # adj.shape:        (B, W, N, N)
+        # B might be None
+
+        w = features.size(-3)
+        n = features.size(-2)
+        in_dim = features.size(-1)
+
+        has_batches = False
+
+        if len(features.size()) > 3:
+            has_batches = True
+            features = torch.cat(torch.split(features, 1, dim=0), dim=1).view(-1, n, in_dim)
+            adj = torch.cat(torch.split(adj, 1, dim=0), dim=1).view(-1, n, n)
+            # turn features shape to (B*W, N, in_dim)
+            # turn adj shape to (B*W, N, N)
+            
 
         t_query = torch.matmul(features, self.W_query) # (W, N, out_dim * n_heads)
         t_key = torch.matmul(features, self.W_key)     # (W, N, out_dim * n_heads)
@@ -37,7 +52,7 @@ class StructuralAttentionLayer(nn.Module):
 
         e = self.leakyrelu(torch.matmul(t_query, t_key.transpose(-1, -2))) # (W, n_heads, N, N)
 
-        mask = adj.view(adj.size(0), 1, adj.size(1), adj.size(2)).repeat([1, self.n_heads, 1, 1])
+        mask = adj.view(adj.size(0), 1, n, n).repeat([1, self.n_heads, 1, 1])
 
         zero_vec = -9e15*torch.ones_like(e)
 
@@ -47,13 +62,18 @@ class StructuralAttentionLayer(nn.Module):
 
         h_prime = torch.matmul(attn, t_value) # (W, n_heads, N, out_dim)
 
-        return torch.cat(
+        output = torch.cat(
             torch.split(h_prime, 1, dim=-3), dim=-1
-        ).view(features.size(0), features.size(1), -1) # (W, N, n_heads * out_dim)
+        ).view(features.size(0), n, -1) # (W, N, n_heads * out_dim)
+
+        if has_batches:
+            output = torch.stack(torch.split(output, w, dim=0), dim=0)
+
+        return output
 
 
 class TemporalAttentionLayer(nn.Module):
-    def __init__(self, in_dim, out_dim, n_heads, n_time_steps=3):
+    def __init__(self, in_dim, out_dim, n_heads, n_time_steps=3, dropout=0.1):
         super(TemporalAttentionLayer, self).__init__()
 
         self.in_dim = in_dim
@@ -61,6 +81,7 @@ class TemporalAttentionLayer(nn.Module):
         self.n_heads = n_heads
 
         self.n_time_steps = n_time_steps
+        self.dropout = dropout
 
         self.W_query = nn.Parameter(torch.empty(size=(in_dim, out_dim * n_heads)))
         nn.init.xavier_uniform_(self.W_query.data, gain=1.414)
@@ -92,15 +113,17 @@ class TemporalAttentionLayer(nn.Module):
 
         out = torch.matmul(attn, t_value) # (B, n_heads * N, W, out_dim)
 
-        out = torch.cat(torch.split(out, out.size(-3) // self.n_heads, dim=-3), dim=-1) # (B, N, W, out_dim * n_heads)
+        out = torch.cat(torch.chunk(out, self.n_heads, dim=-3), dim=-1) # (B, N, W, out_dim * n_heads)
+
+        out = torch.dropout(out, self.dropout, train=self.training)
 
         return self.ffn(torch.cat([out, x], dim=-1)) # (N, W, out_dim * n_heads)
 
 if __name__=='__main__':
     sal = StructuralAttentionLayer(512, 128, 4)
 
-    features = torch.rand(1, 3, 512)
-    adj = torch.ones(1, 3, 3)
+    features = torch.rand(4, 3, 8, 512)
+    adj = torch.ones(4, 3, 8, 8)
     
     output = sal(features, adj)
 
@@ -108,7 +131,7 @@ if __name__=='__main__':
 
     tal = TemporalAttentionLayer(512, 8, 16)
 
-    input = torch.ones(3, 100, 3, 512)
+    input = torch.ones(4, 100, 3, 512)
 
     output = tal(input)
 
