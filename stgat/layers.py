@@ -23,6 +23,10 @@ class StructuralAttentionLayer(nn.Module):
 
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
+        self.norm1 = nn.LayerNorm(n_heads * out_dim)
+        self.ffn = nn.Linear(n_heads * out_dim + in_dim, n_heads * out_dim, bias=False)
+        self.norm2 = nn.LayerNorm(n_heads * out_dim)
+
     def forward(self, features, adj):
         # features.shape:   (B, W, N, in_dim)
         # adj.shape:        (B, W, N, N)
@@ -66,6 +70,13 @@ class StructuralAttentionLayer(nn.Module):
             torch.split(h_prime, 1, dim=-3), dim=-1
         ).view(features.size(0), n, -1) # (W, N, n_heads * out_dim)
 
+        output = self.norm1(output)
+        output = torch.dropout(output, self.dropout, train=self.training)
+        output = self.ffn(torch.cat([output, features], dim=-1))
+        output = self.norm2(output)
+
+        output += features
+
         if has_batches:
             output = torch.stack(torch.split(output, w, dim=0), dim=0)
 
@@ -90,7 +101,10 @@ class TemporalAttentionLayer(nn.Module):
         self.W_value = nn.Parameter(torch.empty(size=(in_dim, out_dim * n_heads)))
         nn.init.xavier_uniform_(self.W_value.data, gain=1.414)
 
-        self.ffn = nn.Linear(n_heads * out_dim + in_dim, n_heads * out_dim)
+
+        self.norm1 = nn.LayerNorm(n_heads * out_dim)
+        self.ffn = nn.Linear(n_heads * out_dim + in_dim, n_heads * out_dim, bias=False)
+        self.norm2 = nn.LayerNorm(n_heads * out_dim)
 
     def forward(self, x):
         # x.shape: (B, N, W, in_dim), B might be None
@@ -115,24 +129,9 @@ class TemporalAttentionLayer(nn.Module):
 
         out = torch.cat(torch.chunk(out, self.n_heads, dim=-3), dim=-1) # (B, N, W, out_dim * n_heads)
 
+        out = self.norm1(out)
         out = torch.dropout(out, self.dropout, train=self.training)
+        out = self.ffn(torch.cat([out, x], dim=-1)) # (N, W, out_dim * n_heads)
+        out = self.norm2(out)
 
-        return self.ffn(torch.cat([out, x], dim=-1)) # (N, W, out_dim * n_heads)
-
-if __name__=='__main__':
-    sal = StructuralAttentionLayer(512, 128, 4)
-
-    features = torch.rand(4, 3, 8, 512)
-    adj = torch.ones(4, 3, 8, 8)
-    
-    output = sal(features, adj)
-
-    print(output.size())
-
-    tal = TemporalAttentionLayer(512, 8, 16)
-
-    input = torch.ones(4, 100, 3, 512)
-
-    output = tal(input)
-
-    print(output.size())
+        return out

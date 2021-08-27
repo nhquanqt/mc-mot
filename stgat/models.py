@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.nn.modules.linear import Linear
 
 from stgat.layers import StructuralAttentionLayer, TemporalAttentionLayer
 
@@ -13,7 +12,7 @@ class STGAT(nn.Module):
         for i, sal in enumerate(self.sals):
             self.add_module('sal_{}'.format(i), sal)
 
-        self.ffn = Linear(512, 128)
+        self.ffn = nn.Linear(512, 128)
 
         self.n_time_steps = n_time_steps
         self.position_embedding = nn.Embedding(n_time_steps, 128)
