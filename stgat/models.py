@@ -16,11 +16,15 @@ class STGAT(nn.Module):
 
         self.n_time_steps = n_time_steps
         self.position_embedding = nn.Embedding(n_time_steps, 128)
+        nn.init.xavier_uniform_(self.position_embedding.weight)
 
         self.tals = [TemporalAttentionLayer(128, 8, 16) for _ in range(2)]
 
         for i, tal in enumerate(self.tals):
             self.add_module('tal_{}'.format(i), tal)
+
+        self.link_predictor = nn.Linear(128, 2)
+        nn.init.xavier_normal_(self.link_predictor.weight)
 
     def forward(self, features, adj):
         # features.shape:   (W, N, feature_dim)
@@ -41,9 +45,17 @@ class STGAT(nn.Module):
         features += self.position_embedding(pos_input)
 
         features = self.tals[0](features)
-        features = self.tals[1](features)
+        features = self.tals[1](features) # (N, W, out_dim)
 
-        return features
+        n = features.size(0)
+        a = features[:, -1].repeat(n, 1)
+        b = features[:, -1].repeat_interleave(n, dim=0)
+
+        ham = a * b
+        pred_link = torch.softmax(self.link_predictor(ham), dim=-1)
+        pred_link = pred_link.view(n, n, 2) # (N, N, 2)
+
+        return features, pred_link
 
 
 
