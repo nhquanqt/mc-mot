@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -15,11 +16,8 @@ class StructuralAttentionLayer(nn.Module):
         self.alpha = alpha
 
         self.W_query = nn.Parameter(torch.empty(size=(in_dim, out_dim * n_heads)))
-        nn.init.xavier_uniform_(self.W_query.data, gain=1.414)
         self.W_key = nn.Parameter(torch.empty(size=(in_dim, out_dim * n_heads)))
-        nn.init.xavier_uniform_(self.W_key.data, gain=1.414)
         self.W_value = nn.Parameter(torch.empty(size=(in_dim, out_dim * n_heads)))
-        nn.init.xavier_uniform_(self.W_value.data, gain=1.414)
 
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
@@ -27,7 +25,17 @@ class StructuralAttentionLayer(nn.Module):
         self.ffn = nn.Linear(n_heads * out_dim + in_dim, n_heads * out_dim, bias=False)
         self.norm2 = nn.LayerNorm(n_heads * out_dim)
 
-    def forward(self, features, adj):
+        self.init_weight()
+
+    def init_weight(self):
+        nn.init.normal_(self.W_query.data, mean=0, std=np.sqrt(2 / (self.in_dim + self.out_dim)))
+        nn.init.normal_(self.W_key.data, mean=0, std=np.sqrt(2 / (self.in_dim + self.out_dim)))
+        nn.init.normal_(self.W_value.data, mean=0, std=np.sqrt(2 / (self.in_dim + self.out_dim)))
+
+        nn.init.xavier_normal_(self.ffn.weight)
+
+
+    def forward(self, features, adj, residual=True):
         # features.shape:   (B, W, N, in_dim)
         # adj.shape:        (B, W, N, N)
         # B might be None
@@ -45,7 +53,6 @@ class StructuralAttentionLayer(nn.Module):
             # turn features shape to (B*W, N, in_dim)
             # turn adj shape to (B*W, N, N)
             
-
         t_query = torch.matmul(features, self.W_query) # (W, N, out_dim * n_heads)
         t_key = torch.matmul(features, self.W_key)     # (W, N, out_dim * n_heads)
         t_value = torch.matmul(features, self.W_value) # (W, N, out_dim * n_heads)
@@ -75,8 +82,6 @@ class StructuralAttentionLayer(nn.Module):
         output = self.ffn(torch.cat([output, features], dim=-1))
         output = self.norm2(output)
 
-        output += features
-
         if has_batches:
             output = torch.stack(torch.split(output, w, dim=0), dim=0)
 
@@ -95,18 +100,23 @@ class TemporalAttentionLayer(nn.Module):
         self.dropout = dropout
 
         self.W_query = nn.Parameter(torch.empty(size=(in_dim, out_dim * n_heads)))
-        nn.init.xavier_uniform_(self.W_query.data, gain=1.414)
         self.W_key = nn.Parameter(torch.empty(size=(in_dim, out_dim * n_heads)))
-        nn.init.xavier_uniform_(self.W_key.data, gain=1.414)
         self.W_value = nn.Parameter(torch.empty(size=(in_dim, out_dim * n_heads)))
-        nn.init.xavier_uniform_(self.W_value.data, gain=1.414)
-
 
         self.norm1 = nn.LayerNorm(n_heads * out_dim)
         self.ffn = nn.Linear(n_heads * out_dim + in_dim, n_heads * out_dim, bias=False)
         self.norm2 = nn.LayerNorm(n_heads * out_dim)
 
-    def forward(self, x):
+        self.init_weight()
+
+    def init_weight(self):
+        nn.init.normal_(self.W_query.data, mean=0, std=np.sqrt(2 / (self.in_dim + self.out_dim)))
+        nn.init.normal_(self.W_key.data, mean=0, std=np.sqrt(2 / (self.in_dim + self.out_dim)))
+        nn.init.normal_(self.W_value.data, mean=0, std=np.sqrt(2 / (self.in_dim + self.out_dim)))
+
+        nn.init.xavier_normal_(self.ffn.weight)
+
+    def forward(self, x, residual=True):
         # x.shape: (B, N, W, in_dim), B might be None
 
         t_query = torch.matmul(x, self.W_query) # (B, N, W, out_dim * n_heads)
